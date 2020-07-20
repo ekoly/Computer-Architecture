@@ -2,29 +2,98 @@
 
 import sys
 
+HLT = 0b00000001
+LDI = 0b10000010
+ST = 0b10000100
+PRN = 0b01000111
+
+MUL = 0b10100010
+ADD = 0b10100000
+
+POP = 0b01000110
+PUSH = 0b01000101
+CALL = 0b01010000
+RET = 0b00010001
+
 class CPU:
     """Main CPU class."""
 
     def __init__(self):
         """Construct a new CPU."""
-        pass
+        self.reg = [0]*8
+        self.reg[7] = 0xF4
+        self.ram = [0]*256
+        self.PC = 0
 
-    def load(self):
+        self.branchtable = {}
+        self.branchtable[HLT] = self.hlt
+        self.branchtable[LDI] = self.ldi
+        self.branchtable[ST] = self.st
+        self.branchtable[PRN] = self.prn
+        self.branchtable[MUL] = self.mul
+        self.branchtable[ADD] = self.add
+        self.branchtable[POP] = self.pop
+        self.branchtable[PUSH] = self.push
+        self.branchtable[CALL] = self.call
+        self.branchtable[RET] = self.ret
+
+    def hlt(self):
+        exit()
+
+    def ldi(self):
+        self.reg[self.ram_read(self.PC+1)] = self.ram_read(self.PC+2)
+        self.PC += 2    
+
+    def st(self):
+        self.ram_write(
+            self.reg[self.ram_read(self.PC+1)],
+            self.reg[self.ram_read(self.PC+2)]
+        )
+        self.PC += 2
+
+    def prn(self):
+        print(self.reg[self.ram_read(self.PC+1)])
+        self.PC += 1
+
+    def mul(self):
+        self.reg[self.ram_read(self.PC+1)] *= self.reg[self.ram_read(self.PC+2)]
+        self.PC += 2
+
+    def add(self):
+        self.reg[self.ram_read(self.PC+1)] += self.reg[self.ram_read(self.PC+2)]
+        self.PC += 2
+
+    def pop(self):
+        self.reg[self.ram_read(self.PC+1)] = self.ram_read(self.reg[7])
+        self.reg[7] += 1
+        self.PC += 1
+
+    def push(self):
+        self.reg[7] -= 1
+        self.ram_write(
+            self.reg[self.ram_read(self.PC+1)],
+            self.reg[7]
+        )
+        self.PC += 1
+
+    def call(self):
+        # push address of next instruction to stack
+        self.reg[7] -= 1
+        self.ram_write(
+            self.PC+2,
+            self.reg[7]
+        )
+        # jump to the address at the given register
+        self.PC = self.reg[self.ram_read(self.PC+1)]
+
+    def ret(self):
+        self.PC = self.ram_read(self.reg[7])
+        self.reg[7] += 1
+
+    def load(self, program):
         """Load a program into memory."""
 
         address = 0
-
-        # For now, we've just hardcoded a program:
-
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
 
         for instruction in program:
             self.ram[address] = instruction
@@ -62,4 +131,17 @@ class CPU:
 
     def run(self):
         """Run the CPU."""
-        pass
+        while True:
+
+            ir = self.ram_read(self.PC)
+
+            self.branchtable[ir]()
+
+            if ir not in {CALL, RET}:
+                self.PC += 1
+
+    def ram_read(self, mar):
+        return self.ram[mar]
+
+    def ram_write(self, mdr, mar):
+        self.ram[mar] = mdr
